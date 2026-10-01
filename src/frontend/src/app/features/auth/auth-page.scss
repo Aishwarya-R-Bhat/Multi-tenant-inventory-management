@@ -1,0 +1,27 @@
+:host {
+  display: flex;
+  justify-content: center;
+  padding: 48px 16px;
+}
+
+mat-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+}
+
+.error {
+  color: var(--mat-sys-error);
+  margin: 0 0 12px;
+}
+
+.switch {
+  margin-top: 16px;
+  text-align: center;
+}
