@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Path filter: work out which parts of the repo changed so unrelated jobs are skipped.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            files=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          else
+            files="src/backend/ src/frontend/"   # pushes to main always run everything
+          fi
+          echo "$files"
+          check() { echo "$files" | grep -Eq "$1" && echo true || echo false; }
+          echo "backend=$(check '^(src/backend/|\.github/workflows/ci\.yml)')" >> "$GITHUB_OUTPUT"
+          echo "frontend=$(check '^(src/frontend/|\.github/workflows/ci\.yml)')" >> "$GITHUB_OUTPUT"
+
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release
+      # Integration tests start a SQL Server container with Testcontainers; Docker is preinstalled on the runner.
+      - run: dotnet test --no-build -c Release
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+      - run: npm ci
+      - run: npx ng build
+      - run: npx ng test --no-watch
+
+  # The single check to require in branch protection: it passes when every job that ran passed, and when jobs were skipped.
+  ci-gate:
+    if: always()
+    needs: [changes, backend, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any job failed or was cancelled
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if echo '${{ join(needs.*.result, ' ') }}' | grep -Eq 'failure|cancelled'; then exit 1; fi
