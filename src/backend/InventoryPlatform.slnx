@@ -6,6 +6,7 @@
     <Project Path="src/InventoryPlatform.Infrastructure/InventoryPlatform.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/InventoryPlatform.IntegrationTests/InventoryPlatform.IntegrationTests.csproj" />
     <Project Path="tests/InventoryPlatform.UnitTests/InventoryPlatform.UnitTests.csproj" />
   </Folder>
 </Solution>
