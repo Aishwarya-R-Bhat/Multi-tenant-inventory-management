@@ -4,7 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-The repository contains **no code yet**, only the design document `Multi-Tenant Order & Inventory Platform Architecture, Stack, Cost and Interview Guide (1).docx`. It is not a git repository. That document is the source of truth for the intended design. Re-read it (e.g. `unzip -p *.docx word/document.xml`) before making architectural decisions. Update this file with real build/test commands once the scaffolding exists. The commands below are the planned ones, not verified.
+The design document `Multi-Tenant Order & Inventory Platform Architecture, Stack, Cost and Interview Guide (1).docx` at the repo root is the source of truth for the intended design. Re-read it (e.g. `unzip -p *.docx word/document.xml`) before making architectural decisions.
+
+Built so far: repo scaffold and docker-compose, the .NET solution with Module 1 (Tenant & Identity: tenant registration, login, refresh-token rotation, tenant isolation, permission checks), an Angular skeleton (login, register, dashboard, users list, auth interceptors/guards) and a CI workflow. Modules 2-9, Azure/Bicep and the deployment pipeline are not built yet. Azure is only needed at deployment time.
+
+## Commands
+
+Local dependencies (SQL Server, RabbitMQ, Redis, Azurite, Mailpit; Docker Desktop must be running): `docker compose up -d`
+
+Backend (run in `src/backend`, .NET 10, `InventoryPlatform.slnx`):
+- Build / all tests: `dotnet build`, `dotnet test`. Integration tests start a SQL Server container through Testcontainers, so Docker must be running.
+- One test: `dotnet test --filter "FullyQualifiedName~Tenant_cannot_read_another_tenants_users"`
+- Run the API on http://localhost:5141: `dotnet run --project src/InventoryPlatform.Api --launch-profile http`
+- Add a migration: `dotnet ef migrations add <Name> -p src/InventoryPlatform.Infrastructure -s src/InventoryPlatform.Api -o Persistence/Migrations` (`dotnet-ef` is a local tool: `dotnet tool restore`)
+- Apply migrations to the local database: `dotnet ef database update -p src/InventoryPlatform.Infrastructure -s src/InventoryPlatform.Api`. The API does not migrate at startup. Tests migrate their own container.
+
+Frontend (run in `src/frontend`, Angular 22, zoneless, Vitest):
+- `npm start` serves http://localhost:4200 and proxies `/api` to http://localhost:5141 (`proxy.conf.json`), so no CORS setup is needed.
+- `npx ng build`, `npx ng test --no-watch`. One spec file: `npx ng test --no-watch --include src/app/core/auth/jwt.spec.ts`
+- No linter is configured yet.
+
+CI (`.github/workflows/ci.yml`) runs the backend and frontend jobs only for the paths that changed. `ci-gate` is the single check to require on `main`.
+
+Quirks: MediatR is pinned to 12.5.0 because newer versions need a paid license. Dev-only secrets (a JWT key and the local SQL password) live in `src/backend/src/InventoryPlatform.Api/appsettings.Development.json`. The Angular CLI sometimes adds an analytics ID to `angular.json`; do not commit that.
+
+Login is by company code (tenant slug) + email + password, since users are tenant-scoped.
 
 ## Project
 
